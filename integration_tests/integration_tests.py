@@ -143,7 +143,72 @@ def get_experiment(test, tmp_dir):
     raise Exception('Unknown test {}'.format(test))
 
 
-def run_test(test, temp_dir):
+def test_predict_package(test, backcompat_test, experiment, predict_package_uri,
+                         temp_dir):
+    errors = []
+    skip = False
+    scenes_to_uris = {}
+    scenes = experiment.dataset.validation_scenes
+    for scene in scenes:
+        rs = scene.raster_source
+        if hasattr(rs, 'uri'):
+            scenes_to_uris[scene.id] = rs.uri
+        elif hasattr(rs, 'uris'):
+            uris = rs.uris
+            if len(uris) > 1:
+                skip = True
+            else:
+                scenes_to_uris[scene.id] = uris[0]
+        else:
+            skip = True
+
+    if skip:
+        console_warning('Skipping predict package test for '
+                        'test {}, experiment {}'.format(
+                            test, experiment.id))
+    else:
+        console_info('Checking predict package produces same results...')
+        predict = rv.Predictor(predict_package_uri, temp_dir).predict
+
+        for scene_config in scenes:
+            # Need to write out labels and read them back,
+            # otherwise the floating point precision direct box
+            # coordinates will not match those from the PREDICT
+            # command, which are rounded to pixel coordinates
+            # via pyproj logic (in the case of rasterio crs transformer.
+            predictor_label_store_uri = os.path.join(
+                temp_dir, test.lower(),
+                'predictor/{}'.format(scene_config.id))
+            uri = scenes_to_uris[scene_config.id]
+            predict(uri, predictor_label_store_uri)
+            scene = scene_config.create_scene(experiment.task, temp_dir)
+            scene_labels = scene.prediction_label_store.get_labels()
+
+            extent = scene.raster_source.get_extent()
+            crs_transformer = scene.raster_source.get_crs_transformer()
+            predictor_labels = scene_config.label_store \
+                                           .for_prediction(
+                                               predictor_label_store_uri) \
+                                           .create_store(
+                                               experiment.task,
+                                               extent,
+                                               crs_transformer,
+                                               temp_dir) \
+                                           .get_labels()
+
+            if not predictor_labels == scene_labels:
+                msg = 'Predictor did not produce the same labels as the Predict command'
+                if backcompat_test:
+                    msg += ' during backward compatibility test'
+                e = TestError(
+                    test, msg,
+                    'for scene {} in experiment {}'.format(
+                        scene_config.id, experiment.id))
+                errors.append(e)
+    return errors
+
+
+def run_test(test, temp_dir, backcompat):
     errors = []
     experiment = get_experiment(test, temp_dir)
 
@@ -151,92 +216,44 @@ def run_test(test, temp_dir):
     msg = experiment.to_proto()
     experiment = rv.ExperimentConfig.from_proto(msg)
 
-    # Check that running doesn't raise any exceptions.
-    try:
-        IntegrationTestExperimentRunner(os.path.join(temp_dir, test.lower())) \
-            .run(experiment, rerun_commands=True)
+    if backcompat:
+        # pp_uri = old_predict_package_uris[test]
+        pp_uri = None
+        backcompat_test = True
+        errors.extend(test_predict_package(
+            test, backcompat_test, experiment, pp_uri, temp_dir))
+    else:
+        # Check that running doesn't raise any exceptions.
+        try:
+            IntegrationTestExperimentRunner(os.path.join(temp_dir, test.lower())) \
+                .run(experiment, rerun_commands=True)
+        except Exception as exc:
+            errors.append(
+                TestError(test, 'raised an exception while running',
+                          traceback.format_exc()))
+            return errors
 
-    except Exception as exc:
-        errors.append(
-            TestError(test, 'raised an exception while running',
-                      traceback.format_exc()))
-        return errors
+        # Check that the eval is similar to expected eval.
+        errors.extend(check_eval(test, temp_dir))
 
-    # Check that the eval is similar to expected eval.
-    errors.extend(check_eval(test, temp_dir))
-
-    if not errors:
-        # Check the prediction package
-        # This will only work with raster_sources that
-        # have a single URI.
-        skip = False
-
-        experiment = experiment.fully_resolve()
-
-        scenes_to_uris = {}
-        scenes = experiment.dataset.validation_scenes
-        for scene in scenes:
-            rs = scene.raster_source
-            if hasattr(rs, 'uri'):
-                scenes_to_uris[scene.id] = rs.uri
-            elif hasattr(rs, 'uris'):
-                uris = rs.uris
-                if len(uris) > 1:
-                    skip = True
-                else:
-                    scenes_to_uris[scene.id] = uris[0]
-            else:
-                skip = True
-
-        if skip:
-            console_warning('Skipping predict package test for '
-                            'test {}, experiment {}'.format(
-                                test, experiment.id))
-        else:
-            console_info('Checking predict package produces same results...')
-            pp = experiment.task.predict_package_uri
-            predict = rv.Predictor(pp, temp_dir).predict
-
-            for scene_config in scenes:
-                # Need to write out labels and read them back,
-                # otherwise the floating point precision direct box
-                # coordinates will not match those from the PREDICT
-                # command, which are rounded to pixel coordinates
-                # via pyproj logic (in the case of rasterio crs transformer.
-                predictor_label_store_uri = os.path.join(
-                    temp_dir, test.lower(),
-                    'predictor/{}'.format(scene_config.id))
-                uri = scenes_to_uris[scene_config.id]
-                predict(uri, predictor_label_store_uri)
-                scene = scene_config.create_scene(experiment.task, temp_dir)
-                scene_labels = scene.prediction_label_store.get_labels()
-
-                extent = scene.raster_source.get_extent()
-                crs_transformer = scene.raster_source.get_crs_transformer()
-                predictor_labels = scene_config.label_store \
-                                               .for_prediction(
-                                                   predictor_label_store_uri) \
-                                               .create_store(
-                                                   experiment.task,
-                                                   extent,
-                                                   crs_transformer,
-                                                   temp_dir) \
-                                               .get_labels()
-
-                if not predictor_labels == scene_labels:
-                    e = TestError(
-                        test, ('Predictor did not produce the same labels '
-                               'as the Predict command'),
-                        'for scene {} in experiment {}'.format(
-                            scene_config.id, experiment.id))
-                    errors.append(e)
+        if not errors:
+            # Check the prediction package
+            # This will only work with raster_sources that
+            # have a single URI.
+            experiment = experiment.fully_resolve()
+            pp_uri = experiment.task.predict_package_uri
+            backcompat_test = False
+            errors.extend(test_predict_package(
+                test, backcompat_test, experiment, pp_uri, temp_dir))
 
     return errors
 
 
 @click.command()
 @click.argument('tests', nargs=-1)
-def main(tests):
+@click.option('--backcompat', default=False,
+              help='Run additional tests to check backwards compatibility')
+def main(tests, backcompat):
     """Runs RV end-to-end and checks that evaluation metrics are correct."""
     if len(tests) == 0:
         tests = all_tests
@@ -244,13 +261,15 @@ def main(tests):
     tests = list(map(lambda x: x.upper(), tests))
 
     with RVConfig.get_tmp_dir() as temp_dir:
+        # TODO remove me
+        temp_dir = '/opt/data/int-test-output'
         errors = []
         for test in tests:
             if test not in all_tests:
                 print('{} is not a valid test.'.format(test))
                 return
 
-            errors.extend(run_test(test, temp_dir))
+            errors.extend(run_test(test, temp_dir, backcompat))
 
             for error in errors:
                 print(error)

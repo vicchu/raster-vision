@@ -143,7 +143,7 @@ def get_experiment(test, tmp_dir):
     raise Exception('Unknown test {}'.format(test))
 
 
-def test_predict_package(test, backcompat_test, experiment, predict_package_uri,
+def test_predict_package(test, back_compat_test, experiment, predict_package_uri,
                          temp_dir):
     errors = []
     skip = False
@@ -168,6 +168,7 @@ def test_predict_package(test, backcompat_test, experiment, predict_package_uri,
                             test, experiment.id))
     else:
         console_info('Checking predict package produces same results...')
+
         predict = rv.Predictor(predict_package_uri, temp_dir).predict
 
         for scene_config in scenes:
@@ -181,6 +182,7 @@ def test_predict_package(test, backcompat_test, experiment, predict_package_uri,
                 'predictor/{}'.format(scene_config.id))
             uri = scenes_to_uris[scene_config.id]
             predict(uri, predictor_label_store_uri)
+
             scene = scene_config.create_scene(experiment.task, temp_dir)
             scene_labels = scene.prediction_label_store.get_labels()
 
@@ -198,7 +200,7 @@ def test_predict_package(test, backcompat_test, experiment, predict_package_uri,
 
             if not predictor_labels == scene_labels:
                 msg = 'Predictor did not produce the same labels as the Predict command'
-                if backcompat_test:
+                if back_compat_test:
                     msg += ' during backward compatibility test'
                 e = TestError(
                     test, msg,
@@ -208,7 +210,14 @@ def test_predict_package(test, backcompat_test, experiment, predict_package_uri,
     return errors
 
 
-def run_test(test, temp_dir, backcompat):
+back_compat_predict_packages = {
+    rv.CHIP_CLASSIFICATION: '/opt/data/pre-vector-source-predict-packages/chip-classification-package.zip',
+    rv.SEMANTIC_SEGMENTATION: '/opt/data/pre-vector-source-predict-packages/semantic-segmentation-package.zip',
+    rv.OBJECT_DETECTION: '/opt/data/pre-vector-source-predict-packages/object-detection-package.zip'
+}
+
+
+def run_test(test, temp_dir, back_compat):
     errors = []
     experiment = get_experiment(test, temp_dir)
 
@@ -216,12 +225,14 @@ def run_test(test, temp_dir, backcompat):
     msg = experiment.to_proto()
     experiment = rv.ExperimentConfig.from_proto(msg)
 
-    if backcompat:
-        # pp_uri = old_predict_package_uris[test]
-        pp_uri = None
-        backcompat_test = True
+    if back_compat:
+        IntegrationTestExperimentRunner(os.path.join(temp_dir, test.lower())) \
+            .run(experiment, rerun_commands=True)
+
+        pp_uri = back_compat_predict_packages[test]
+        back_compat_test = True
         errors.extend(test_predict_package(
-            test, backcompat_test, experiment, pp_uri, temp_dir))
+            test, back_compat_test, experiment, pp_uri, temp_dir))
     else:
         # Check that running doesn't raise any exceptions.
         try:
@@ -242,18 +253,18 @@ def run_test(test, temp_dir, backcompat):
             # have a single URI.
             experiment = experiment.fully_resolve()
             pp_uri = experiment.task.predict_package_uri
-            backcompat_test = False
+            back_compat_test = False
             errors.extend(test_predict_package(
-                test, backcompat_test, experiment, pp_uri, temp_dir))
+                test, back_compat_test, experiment, pp_uri, temp_dir))
 
     return errors
 
 
 @click.command()
 @click.argument('tests', nargs=-1)
-@click.option('--backcompat', default=False,
-              help='Run additional tests to check backwards compatibility')
-def main(tests, backcompat):
+@click.option('--back-compat', default=False, is_flag=True,
+              help='Run test to check backwards compatibility (and skip other tests)')
+def main(tests, back_compat):
     """Runs RV end-to-end and checks that evaluation metrics are correct."""
     if len(tests) == 0:
         tests = all_tests
@@ -261,15 +272,13 @@ def main(tests, backcompat):
     tests = list(map(lambda x: x.upper(), tests))
 
     with RVConfig.get_tmp_dir() as temp_dir:
-        # TODO remove me
-        temp_dir = '/opt/data/int-test-output'
         errors = []
         for test in tests:
             if test not in all_tests:
                 print('{} is not a valid test.'.format(test))
                 return
 
-            errors.extend(run_test(test, temp_dir, backcompat))
+            errors.extend(run_test(test, temp_dir, back_compat))
 
             for error in errors:
                 print(error)

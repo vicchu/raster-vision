@@ -1,0 +1,118 @@
+{
+  "plugins": {},
+  "rootUri": "/opt/data/int-test-output/chip_classification/bundle/chip-classification-test",
+  "commandType": "BUNDLE",
+  "bundleConfig": {
+    "scene": {
+      "id": "cc_test",
+      "groundTruthLabelSource": {
+        "sourceType": "CHIP_CLASSIFICATION_GEOJSON",
+        "chipClassificationGeojsonSource": {
+          "cellSize": 200,
+          "useIntersectionOverCell": false,
+          "uri": "/opt/src/integration_tests/chip_classification_tests/scene/labels.json",
+          "backgroundClassId": 3,
+          "pickMinClassId": true,
+          "ioaThresh": 0.5,
+          "inferCells": true
+        }
+      },
+      "rasterSource": {
+        "sourceType": "GEOTIFF_SOURCE",
+        "transformers": [
+          {
+            "statsUri": "stats.json",
+            "transformerType": "STATS_TRANSFORMER"
+          }
+        ],
+        "channelOrder": [
+          0,
+          1,
+          2
+        ],
+        "geotiffFiles": {
+          "uris": [
+            "BUNDLE"
+          ]
+        }
+      }
+    },
+    "analyzers": [
+      {
+        "statsUri": "stats.json",
+        "analyzerType": "STATS_ANALYZER"
+      }
+    ],
+    "backend": {
+      "kerasClassificationConfig": {
+        "modelUri": "model",
+        "debug": true,
+        "doMonitoring": false,
+        "syncInterval": 600,
+        "replaceModel": true,
+        "trainingDataUri": "/opt/data/int-test-output/chip_classification/chip/chip-classification-test",
+        "kcConfig": {
+          "model": {
+            "type": "RESNET50",
+            "modelPath": "",
+            "loadWeightsByName": true,
+            "inputSize": 200.0
+          },
+          "trainer": {
+            "options": {
+              "lrSchedule": [
+                {
+                  "lr": 9.999999747378752e-05,
+                  "epoch": 0.0
+                }
+              ],
+              "nbEpochs": 8.0,
+              "outputDir": "",
+              "inputSize": 200.0,
+              "shortEpoch": false,
+              "batchSize": 4.0,
+              "trainingDataDir": "",
+              "validationDataDir": "",
+              "saveBest": false,
+              "classNames": [
+                "car",
+                "building",
+                "background"
+              ]
+            },
+            "optimizer": {
+              "type": "ADAM",
+              "initLr": 9.999999747378752e-05
+            }
+          }
+        },
+        "trainingOutputUri": "/opt/data/int-test-output/chip_classification/train/chip-classification-test"
+      },
+      "pretrainedModelUri": "https://github.com/fchollet/deep-learning-models/releases/download/v0.2/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5",
+      "backendType": "KERAS_CLASSIFICATION"
+    },
+    "task": {
+      "taskType": "CHIP_CLASSIFICATION",
+      "chipClassificationConfig": {
+        "classItems": [
+          {
+            "id": 1,
+            "color": "red",
+            "name": "car"
+          },
+          {
+            "id": 2,
+            "color": "blue",
+            "name": "building"
+          },
+          {
+            "id": 3,
+            "color": "black",
+            "name": "background"
+          }
+        ],
+        "chipSize": 200
+      }
+    }
+  }
+}

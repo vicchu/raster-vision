@@ -143,8 +143,35 @@ def get_experiment(test, tmp_dir):
     raise Exception('Unknown test {}'.format(test))
 
 
+def make_old_predict_package(test, predict_package_uri, temp_dir):
+    import shutil
+    import zipfile
+    import json
+
+    old_pp_uri = os.path.join(temp_dir, 'old-{}-package.zip'.format(test))
+    shutil.copy_file(predict_package_uri, old_pp_uri)
+
+    with zipfile.ZipFile(old_pp_uri, 'w') as package_zip:
+
+
+    # open zip file
+    # edit bundle_config.json
+    # make zip file
+    # return path
+
+    with zipfile.ZipFile(package_path, 'w') as package_zip:
+        for path in bundle_files:
+            package_zip.write(path, arcname=os.path.basename(path))
+        package_zip.write(
+            bundle_config_path,
+            arcname=os.path.basename(bundle_config_path))
+
+    pass
+
+
 def test_predict_package(test, back_compat_test, experiment, predict_package_uri,
                          temp_dir):
+    """Check that predictions from predict package match ones from running experiment"""
     errors = []
     skip = False
     scenes_to_uris = {}
@@ -169,6 +196,8 @@ def test_predict_package(test, back_compat_test, experiment, predict_package_uri
     else:
         console_info('Checking predict package produces same results...')
 
+        if back_compat_test:
+            predict_package_uri = make_old_predict_package(predict_package_uri)
         predict = rv.Predictor(predict_package_uri, temp_dir).predict
 
         for scene_config in scenes:
@@ -210,13 +239,6 @@ def test_predict_package(test, back_compat_test, experiment, predict_package_uri
     return errors
 
 
-back_compat_predict_packages = {
-    rv.CHIP_CLASSIFICATION: '/opt/data/pre-vector-source-predict-packages/chip-classification-package.zip',
-    rv.SEMANTIC_SEGMENTATION: '/opt/data/pre-vector-source-predict-packages/semantic-segmentation-package.zip',
-    rv.OBJECT_DETECTION: '/opt/data/pre-vector-source-predict-packages/object-detection-package.zip'
-}
-
-
 def run_test(test, temp_dir, back_compat):
     errors = []
     experiment = get_experiment(test, temp_dir)
@@ -225,35 +247,33 @@ def run_test(test, temp_dir, back_compat):
     msg = experiment.to_proto()
     experiment = rv.ExperimentConfig.from_proto(msg)
 
-    if back_compat:
+    '''
+    # Check that running doesn't raise any exceptions.
+    try:
         IntegrationTestExperimentRunner(os.path.join(temp_dir, test.lower())) \
             .run(experiment, rerun_commands=True)
+    except Exception as exc:
+        errors.append(
+            TestError(test, 'raised an exception while running',
+                      traceback.format_exc()))
+        return errors
 
-        pp_uri = back_compat_predict_packages[test]
-        back_compat_test = True
+    # Check that the eval is similar to expected eval.
+    errors.extend(check_eval(test, temp_dir))
+    '''
+
+    if not errors:
+        # Check the prediction package
+        # This will only work with raster_sources that
+        # have a single URI.
+        experiment = experiment.fully_resolve()
+        pp_uri = experiment.task.predict_package_uri
+        back_compat_test = False
         errors.extend(test_predict_package(
             test, back_compat_test, experiment, pp_uri, temp_dir))
-    else:
-        # Check that running doesn't raise any exceptions.
-        try:
-            IntegrationTestExperimentRunner(os.path.join(temp_dir, test.lower())) \
-                .run(experiment, rerun_commands=True)
-        except Exception as exc:
-            errors.append(
-                TestError(test, 'raised an exception while running',
-                          traceback.format_exc()))
-            return errors
 
-        # Check that the eval is similar to expected eval.
-        errors.extend(check_eval(test, temp_dir))
-
-        if not errors:
-            # Check the prediction package
-            # This will only work with raster_sources that
-            # have a single URI.
-            experiment = experiment.fully_resolve()
-            pp_uri = experiment.task.predict_package_uri
-            back_compat_test = False
+        if back_compat:
+            back_compat_test = True
             errors.extend(test_predict_package(
                 test, back_compat_test, experiment, pp_uri, temp_dir))
 
@@ -272,6 +292,8 @@ def main(tests, back_compat):
     tests = list(map(lambda x: x.upper(), tests))
 
     with RVConfig.get_tmp_dir() as temp_dir:
+        # TODO remove
+        temp_dir = '/opt/data/int-tests'
         errors = []
         for test in tests:
             if test not in all_tests:

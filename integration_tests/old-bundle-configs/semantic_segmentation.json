@@ -1,0 +1,121 @@
+{
+  "commandType": "BUNDLE",
+  "rootUri": "/opt/data/int-test-output/semantic_segmentation/bundle/semantic-segmentation-test",
+  "bundleConfig": {
+    "backend": {
+      "backendType": "TF_DEEPLAB",
+      "tfDeeplabConfig": {
+        "trainPy": "/opt/tf-models/deeplab/train.py",
+        "fineTuneCheckpointName": "semantic-segmentation-test",
+        "syncInterval": 600,
+        "replaceModel": true,
+        "trainingDataUri": "/opt/data/int-test-output/semantic_segmentation/chip/semantic-segmentation-test",
+        "trainingOutputUri": "/opt/data/int-test-output/semantic_segmentation/train/semantic-segmentation-test",
+        "modelUri": "model",
+        "trainRestartDir": "",
+        "debug": true,
+        "doMonitoring": true,
+        "exportPy": "/opt/tf-models/deeplab/export_model.py",
+        "tfdlConfig": {
+          "modelVariant": "mobilenet_v2",
+          "initializeLastLayer": "true",
+          "trainSplit": "train",
+          "lastLayersContainLogitsOnly": "false",
+          "trainBatchSize": 1.0,
+          "trainCropSize": [
+            300.0,
+            300.0
+          ],
+          "saveIntervalSecs": 600.0,
+          "fineTuneBatchNorm": "true",
+          "trainingNumberOfSteps": 1.0,
+          "decoderOutputStride": 1.0,
+          "baseLearningRate": "0.001",
+          "saveSummariesSecs": 600.0,
+          "outputStride": 16.0,
+          "dlCustomValidation": 1728.0,
+          "dlCustomTrain": 11520.0,
+          "dataset": "custom"
+        }
+      },
+      "pretrainedModelUri": "https://github.com/azavea/raster-vision-data/releases/download/0.0.6/deeplab-test-model.tar.gz"
+    },
+    "task": {
+      "debug": true,
+      "semanticSegmentationConfig": {
+        "chipOptions": {
+          "windowMethod": "sliding",
+          "targetCountThreshold": 1000,
+          "chipsPerScene": 1000,
+          "negativeSurvivalProbability": 1.0,
+          "debugChipProbability": 1.0,
+          "stride": 300
+        },
+        "chipSize": 300,
+        "classItems": [
+          {
+            "id": 1,
+            "color": "red",
+            "name": "red"
+          },
+          {
+            "id": 2,
+            "color": "green",
+            "name": "green"
+          }
+        ]
+      },
+      "taskType": "SEMANTIC_SEGMENTATION",
+      "predictBatchSize": 10,
+      "predictPackageUri": "/opt/data/int-test-output/semantic_segmentation/bundle/semantic-segmentation-test/predict_package.zip"
+    },
+    "scene": {
+      "groundTruthLabelSource": {
+        "sourceType": "SEMANTIC_SEGMENTATION_RASTER",
+        "semanticSegmentationRasterSource": {
+          "source": {
+            "sourceType": "GEOTIFF_SOURCE",
+            "geotiffFiles": {
+              "uris": [
+                "/opt/src/integration_tests/semantic_segmentation_tests/scene/labels.tif"
+              ]
+            }
+          },
+          "rgbClassItems": [
+            {
+              "id": 1,
+              "color": "red",
+              "name": "red"
+            },
+            {
+              "id": 2,
+              "color": "green",
+              "name": "green"
+            }
+          ]
+        }
+      },
+      "id": "test-scene",
+      "predictionLabelStore": {
+        "storeType": "SEMANTIC_SEGMENTATION_RASTER",
+        "semanticSegmentationRasterStore": {
+          "rgb": true
+        }
+      },
+      "rasterSource": {
+        "sourceType": "GEOTIFF_SOURCE",
+        "channelOrder": [
+          0,
+          1,
+          2
+        ],
+        "geotiffFiles": {
+          "uris": [
+            "BUNDLE"
+          ]
+        }
+      }
+    }
+  },
+  "plugins": {}
+}

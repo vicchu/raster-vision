@@ -306,3 +306,10 @@ def get_cached_file(cache_dir, uri):
         path = ungz_path
 
     return path
+
+
+def gdalify(uri):
+    # TODO handle http and other formats
+    if uri.startswith('s3://'):
+        return uri.replace('s3://', '/vsis3/')
+    return uri

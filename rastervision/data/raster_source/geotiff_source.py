@@ -9,7 +9,7 @@ from rastervision.core.box import Box
 from rastervision.data.crs_transformer import RasterioCRSTransformer
 from rastervision.data.raster_source.rasterio_source \
     import RasterioRasterSource
-from rastervision.utils.files import download_if_needed
+from rastervision.utils.files import download_if_needed, gdalify
 
 log = logging.getLogger(__name__)
 wgs84 = pyproj.Proj({'init': 'epsg:4326'})
@@ -17,19 +17,32 @@ wgs84_proj4 = '+init=epsg:4326'
 meters_per_degree = 111319.5
 
 
-def build_vrt(vrt_path, image_paths):
-    """Build a VRT for a set of TIFF files."""
+def build_vrt(image_uris, temp_dir, download=True):
+    log.info('Building VRT...')
+    if download:
+        image_paths = [download_if_needed(uri, temp_dir) for uri in image_uris]
+    else:
+        image_paths = [gdalify(uri) for uri in image_uris]
+    vrt_path = os.path.join(temp_dir, 'index.vrt')
+
+    # https://stackoverflow.com/questions/36287720/boto3-get-credentials-dynamically
+    # TODO only do this if using s3 uris
+    import boto3
+    session = boto3.Session()
+    credentials = session.get_credentials()
+    credentials = credentials.get_frozen_credentials()
+    access_key = credentials.access_key
+    secret_key = credentials.secret_key
+    aws_env = os.environ.copy()
+    aws_env['AWS_SECRET_ACCESS_KEY'] = secret_key
+    aws_env['AWS_ACCESS_KEY_ID'] = access_key
+
     cmd = ['gdalbuildvrt', vrt_path]
     cmd.extend(image_paths)
-    subprocess.run(cmd)
+    print(cmd)
+    subprocess.run(cmd, env=aws_env)
 
-
-def download_and_build_vrt(image_uris, temp_dir):
-    log.info('Building VRT...')
-    image_paths = [download_if_needed(uri, temp_dir) for uri in image_uris]
-    image_path = os.path.join(temp_dir, 'index.vrt')
-    build_vrt(image_path, image_paths)
-    return image_path
+    return vrt_path
 
 
 class GeoTiffSource(RasterioRasterSource):
@@ -45,15 +58,11 @@ class GeoTiffSource(RasterioRasterSource):
         self.uris = uris
         super().__init__(raster_transformers, temp_dir, channel_order)
 
-    def _download_data(self, temp_dir):
-        if len(self.uris) == 1:
-            return download_if_needed(self.uris[0], temp_dir)
-        else:
-            return download_and_build_vrt(self.uris, temp_dir)
+    def _get_image_path(self, temp_dir, download=True):
+        return build_vrt(self.uris, temp_dir, download=download)
 
-    def _set_crs_transformer(self):
-        self.crs_transformer = RasterioCRSTransformer.from_dataset(
-            self.image_dataset)
+    def _set_crs_transformer(self, image_dataset):
+        self.crs_transformer = RasterioCRSTransformer.from_dataset(image_dataset)
 
     def _get_chip(self, window):
         no_shift = self.x_shift_meters == 0.0 and self.y_shift_meters == 0.0

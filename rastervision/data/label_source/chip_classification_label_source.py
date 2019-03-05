@@ -41,27 +41,27 @@ def infer_cell(cell,
             the box covering the greatest area.
     """
     cell_geom = cell.to_shapely()
-    intersecting_polygons = str_tree.query(cell_geom)
+    inter_polys = str_tree.query(cell_geom)
 
-    intersection_over_cells = []
-    intersection_over_polygons = []
+    inter_over_cells = []
+    inter_over_polys = []
     class_ids = []
 
     # Find polygons whose intersection with the cell is big enough.
-    for polygon in intersecting_polygons:
-        intersection = polygon.intersection(cell_geom)
-        intersection_over_cell = intersection.area / cell_geom.area
-        intersection_over_polygon = intersection.area / polygon.area
+    for poly in inter_polys:
+        inter = poly.intersection(cell_geom)
+        inter_over_cell = inter.area / cell_geom.area
+        inter_over_poly = inter.area / poly.area
 
         if use_intersection_over_cell:
-            enough_intersection = intersection_over_cell >= ioa_thresh
+            enough_inter = inter_over_cell >= ioa_thresh
         else:
-            enough_intersection = intersection_over_polygon >= ioa_thresh
+            enough_inter = inter_over_poly >= ioa_thresh
 
-        if enough_intersection:
-            intersection_over_cells.append(intersection_over_cell)
-            intersection_over_polygons.append(intersection_over_polygon)
-            class_ids.append(polygon.class_id)
+        if enough_inter:
+            inter_over_cells.append(inter_over_cell)
+            inter_over_polys.append(inter_over_poly)
+            class_ids.append(poly.class_id)
 
     # Infer class id for cell.
     if len(class_ids) == 0:
@@ -71,7 +71,7 @@ def infer_cell(cell,
     else:
         # Pick class_id of the polygon with the biggest intersection over
         # cell. If there is a tie, pick the first.
-        class_id = class_ids[np.argmax(intersection_over_cells)]
+        class_id = class_ids[np.argmax(inter_over_cells)]
 
     return class_id
 

@@ -21,13 +21,21 @@ def transform_geojson(geojson, crs_transformer=None):
         if geom.geom_type in ['MultiPolygon', 'MultiPoint', 'MultiLineString']:
             geoms = list(geom)
 
-        # Use buffer trick to handle self-intersecting polygons.
-        if geoms[0].geom_type == 'Polygon':
-            buf_geoms = []
-            # Note: buffer returns a MultiPolygon if there is a bowtie.
-            for g in geoms:
-                buf_geoms.extend(list(g.buffer(0)))
-            geoms = buf_geoms
+        # Buffer points and linestrings.
+        # TODO make these configurable
+        line_buf = 1
+        point_buf = 1
+        new_geoms = []
+        for g in geoms:
+            if g.geom_type == 'LineString':
+                new_geoms.append(g.buffer(line_buf))
+            elif g.geom_type == 'Point':
+                new_geoms.append(g.buffer(point_buf))
+            else:
+                # Use buffer trick to handle self-intersecting polygons.
+                # Note: buffer returns a MultiPolygon if there is a bowtie.
+                new_geoms.extend(list(g.buffer(0)))
+        geoms = new_geoms
 
         if crs_transformer is not None:
             # Convert map to pixel coords.

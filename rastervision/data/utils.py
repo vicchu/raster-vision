@@ -1,51 +1,6 @@
 import shapely
 
 
-def geojson_to_shapes(geojson, crs_transformer):
-    """Convert GeoJSON into list of shapely geoms in pixel-based coords.
-
-    Args:
-        geojson: dict in GeoJSON format with class_id property for each
-            feature
-        crs_transformer: CRSTransformer used to convert from map to pixel
-            coords
-
-    Returns:
-        List of (shapely.geometry, class_id) tuples
-    """
-    features = geojson['features']
-    shapes = []
-
-    for feature in features:
-        # This was added to handle empty geoms which appear when using
-        # OSM vector tiles.
-        if feature['geometry'].get('coordinates') is None:
-            continue
-
-        geom = shapely.geometry.shape(feature['geometry'])
-        geoms = [geom]
-
-        # Convert MultiX to list of X.
-        if geom.geom_type in ['MultiPolygon', 'MultiPoint', 'MultiLineString']:
-            geoms = list(geom)
-
-        # Use buffer trick to handle self-intersecting polygons.
-        if geoms[0].geom_type == 'Polygon':
-            geoms = [g.buffer(0) for g in geoms]
-
-        # Convert map to pixel coords.
-        def transform_shape(x, y, z=None):
-            return crs_transformer.map_to_pixel((x, y))
-
-        geoms = [shapely.ops.transform(transform_shape, g) for g in geoms]
-
-        # Tack on class_id.
-        class_id = feature['properties']['class_id']
-        shapes.extend([(g, class_id) for g in geoms])
-
-    return shapes
-
-
 def boxes_to_geojson(boxes, class_ids, crs_transformer, class_map,
                      scores=None):
     """Convert boxes and associated data into a GeoJSON dict.

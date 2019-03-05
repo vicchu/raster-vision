@@ -127,9 +127,8 @@ class VectorTileVectorSource(VectorSource):
         self.uri = uri
         self.zoom = zoom
         self.id_field = id_field
-        self.crs_transformer = crs_transformer
         self.extent = extent
-        super().__init__(class_inf_opts)
+        super().__init__(crs_transformer, class_inf_opts)
 
     def _get_geojson(self):
         # This attempts to do things in an efficient order. First, we extract raw

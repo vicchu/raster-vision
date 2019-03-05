@@ -5,7 +5,7 @@ from rastervision.utils.files import file_to_str
 
 
 class GeoJSONVectorSource(VectorSource):
-    def __init__(self, uri, class_inf_opts=None):
+    def __init__(self, uri, crs_transformer, class_inf_opts=None):
         """Constructor.
 
         Args:
@@ -13,7 +13,7 @@ class GeoJSONVectorSource(VectorSource):
             class_inf_opts: ClassInferenceOptions
         """
         self.uri = uri
-        super().__init__(class_inf_opts)
+        super().__init__(crs_transformer, class_inf_opts)
 
     def _get_geojson(self):
         geojson = json.loads(file_to_str(self.uri))

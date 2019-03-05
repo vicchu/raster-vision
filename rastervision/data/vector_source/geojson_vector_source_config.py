@@ -23,6 +23,7 @@ class GeoJSONVectorSourceConfig(VectorSourceConfig):
     def create_source(self, crs_transformer=None, extent=None, class_map=None):
         return GeoJSONVectorSource(
             self.uri,
+            crs_transformer,
             class_inf_opts=ClassInferenceOptions(
                 class_map=class_map,
                 class_id_to_filter=self.class_id_to_filter,

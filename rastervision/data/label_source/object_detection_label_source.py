@@ -24,10 +24,8 @@ class ObjectDetectionLabelSource(LabelSource):
                 .create_source(
                     crs_transformer=crs_transformer, extent=extent, class_map=class_map)
 
-        self.labels = ObjectDetectionLabels.make_empty()
-        geojson = vector_source.get_geojson()
-        self.labels = geojson_to_object_detection_labels(
-            geojson, crs_transformer, extent=extent)
+        self.labels = ObjectDetectionLabels.from_geojson(
+            vector_source.get_geoms(), extent=extent)
 
     def get_labels(self, window=None):
         if window is None:

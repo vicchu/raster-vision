@@ -306,3 +306,11 @@ def get_cached_file(cache_dir, uri):
         path = ungz_path
 
     return path
+
+
+def file_to_json(uri):
+    return json.loads(file_to_str(uri))
+
+
+def json_to_file(js, uri):
+    str_to_file(json.dumps(js), uri)

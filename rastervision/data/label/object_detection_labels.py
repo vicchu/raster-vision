@@ -106,7 +106,7 @@ class ObjectDetectionLabels(Labels):
             geom = shapely.shape(f['geometry'])
             (xmin, ymin, xmax, ymax) = geom.bounds
             boxes.append(Box(ymin, xmin, ymax, xmax))
-            geom = shapely.shape(f['geometry'])
+            
             props = f['properties']
             class_ids.append(props['class_id'])
             scores.append(props.get('score', 1.0))

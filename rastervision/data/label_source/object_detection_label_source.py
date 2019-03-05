@@ -1,8 +1,6 @@
 import rastervision as rv
 from rastervision.data.label import ObjectDetectionLabels
 from rastervision.data.label_source import LabelSource
-from rastervision.data.label_source.utils import (
-    geojson_to_object_detection_labels)
 
 
 class ObjectDetectionLabelSource(LabelSource):

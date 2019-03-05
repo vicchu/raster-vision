@@ -2,11 +2,11 @@ import shapely
 
 
 def geojson_to_shapes(geojson, crs_transformer):
-    """Convert GeoJSON into list of shapely.geometry shape.
+    """Convert GeoJSON into list of shapely geoms in pixel-based coords.
 
     Args:
         geojson: dict in GeoJSON format with class_id property for each
-            feature (class_id defaults to 1 if missing)
+            feature
         crs_transformer: CRSTransformer used to convert from map to pixel
             coords
 
@@ -17,37 +17,31 @@ def geojson_to_shapes(geojson, crs_transformer):
     shapes = []
 
     for feature in features:
-        properties = feature.get('properties', {})
-        class_id = properties.get('class_id', 1)
-        geom_type = feature['geometry']['type']
-
-        # This was added to handle empty GeometryCollections which appear when using
+        # This was added to handle empty geoms which appear when using
         # OSM vector tiles.
         if feature['geometry'].get('coordinates') is None:
             continue
 
-        coordinates = feature['geometry']['coordinates']
+        geom = shapely.geometry.shape(feature['geometry'])
+        geoms = [geom]
 
-        if geom_type == 'MultiPolygon':
-            for polygon in coordinates:
-                shell = polygon[0]
-                shape = [crs_transformer.map_to_pixel(p) for p in shell]
-                # Trick to handle self-intersecting polygons using buffer(0)
-                shape = shapely.geometry.Polygon(shape).buffer(0)
-                shapes.append((shape, class_id))
-        elif geom_type == 'Polygon':
-            shell = coordinates[0]
-            shape = [crs_transformer.map_to_pixel(p) for p in shell]
-            # Trick to handle self-intersecting polygons using buffer(0)
-            shape = shapely.geometry.Polygon(shape).buffer(0)
-            shapes.append((shape, class_id))
-        elif geom_type == 'LineString':
-            shape = [crs_transformer.map_to_pixel(p) for p in coordinates]
-            shape = shapely.geometry.LineString(shape)
-            shapes.append((shape, class_id))
-        else:
-            # TODO: logging warning that this type can't be parsed.
-            pass
+        # Convert MultiX to list of X.
+        if geom.geom_type in ['MultiPolygon', 'MultiPoint', 'MultiLineString']:
+            geoms = list(geom)
+
+        # Use buffer trick to handle self-intersecting polygons.
+        if geoms[0].geom_type == 'Polygon':
+            geoms = [g.buffer(0) for g in geoms]
+
+        # Convert map to pixel coords.
+        def transform_shape(x, y, z=None):
+            return crs_transformer.map_to_pixel((x, y))
+
+        geoms = [shapely.ops.transform(transform_shape, g) for g in geoms]
+
+        # Tack on class_id.
+        class_id = feature['properties']['class_id']
+        shapes.extend([(g, class_id) for g in geoms])
 
     return shapes
 
